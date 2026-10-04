@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+dist/
+test/aus*/
+test/lose/
+test/*.txt
+test/*.blend

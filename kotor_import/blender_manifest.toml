@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "kotor_import"
+version = "0.1.0"
+name = "KOTOR Import"
+tagline = "Import characters with animations from Knights of the Old Republic"
+maintainer = "DennisHerrm"
+type = "add-on"
+website = "https://github.com/DennisHerrm/KOTOR-Import-Blender"
+tags = ["Import-Export", "Animation"]
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+
+[permissions]
+files = "Read the game files of your own KOTOR installation"
