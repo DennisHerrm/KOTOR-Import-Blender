@@ -41,7 +41,8 @@ Characters face **−Y** (towards the *Front* view), 1 Blender unit = 1 m, as in
 
 ## Installation
 
-Download `kotor_import-<version>.zip` from the [releases](../../releases). Do not unzip it.
+**[⬇ Download kotor_import-0.1.0.zip](https://github.com/DennisHerrm/KOTOR-Import-Blender/releases/download/v0.1.0/kotor_import-0.1.0.zip)**
+(all versions: [releases](../../releases)). Do not unzip it.
 
 - **Blender 4.2 and newer**: *Edit → Preferences → Get Extensions* → menu (⌄) at the top right →
   *Install from Disk…* → pick the ZIP. (Dragging the ZIP into the Blender window works too.)
