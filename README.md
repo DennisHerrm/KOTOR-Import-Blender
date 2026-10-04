@@ -15,7 +15,9 @@ same reader, ported to pure Python and checked against the Max plugin's C++ read
 - **KOTOR panel** in the 3D View sidebar (`N` → *KOTOR*): all 506 appearances from the game's
   `appearance.2da`, sorted into *Party / NPCs / Creatures / Droids / All*, with search, body
   variant A–J (armour/clothing) and the matching head.
-- **File → Import → KOTOR Character (game)**: search all characters and import one directly.
+- **File → Import → KOTOR Character…**: import window with category, searchable character list,
+  variant, head, textures and – optionally – the animations (JKA set or all) in one go.
+- **File → Import → KOTOR Character (quick search)**: type a name, press Enter.
 - **File → Import → KOTOR Model (.mdl)**: loose binary `.mdl` files (with their `.mdx`); textures
   and supermodels come from the game.
 - **Armature** with one bone per model node, bones point towards their children; hooks (lightsaber,
@@ -41,7 +43,7 @@ Characters face **−Y** (towards the *Front* view), 1 Blender unit = 1 m, as in
 
 ## Installation
 
-**[⬇ Download kotor_import-0.1.0.zip](https://github.com/DennisHerrm/KOTOR-Import-Blender/releases/download/v0.1.0/kotor_import-0.1.0.zip)**
+**[⬇ Download kotor_import-0.2.0.zip](https://github.com/DennisHerrm/KOTOR-Import-Blender/releases/download/v0.2.0/kotor_import-0.2.0.zip)**
 (all versions: [releases](../../releases)). Do not unzip it.
 
 - **Blender 4.2 and newer**: *Edit → Preferences → Get Extensions* → menu (⌄) at the top right →
@@ -53,6 +55,11 @@ The game folder is found automatically (Steam, GOG). Otherwise set it in the add
 in the KOTOR panel.
 
 ## Usage
+
+**Quickest:** *File → Import → KOTOR Character…* – pick category and character (type in the search
+field under the list), choose a variant and *Animations: None / JKA set / All*, press *Import*.
+
+**Or the sidebar:**
 
 1. 3D View → sidebar (`N`) → tab **KOTOR** → *Load Game*.
 2. Pick a category and a character, a variant if there are several, then *Import Character*.

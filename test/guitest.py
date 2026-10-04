@@ -84,6 +84,16 @@ def ablauf():
             return 10.0
         if s == 3:
             foto("3_import")
+            with bpy.context.temp_override(window=w, area=area):
+                bpy.ops.wm.call_menu(name="TOPBAR_MT_file_import")
+            return 1.5
+        if s == 4:
+            foto("4_menue")
+            with bpy.context.temp_override(window=w, area=area):
+                bpy.ops.kotor.fenster("INVOKE_DEFAULT")
+            return 1.5
+        if s == 5:
+            foto("5_fenster")
             bpy.ops.wm.quit_blender()
             return None
     except Exception:

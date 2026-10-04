@@ -11,9 +11,9 @@
 bl_info = {
     "name": "KOTOR Import",
     "author": "DennisHerrm",
-    "version": (0, 1, 0),
+    "version": (0, 2, 0),
     "blender": (4, 0, 0),
-    "location": "View3D > Sidebar > KOTOR, File > Import > KOTOR Character",
+    "location": "File > Import > KOTOR Character..., View3D > Sidebar > KOTOR",
     "description": "Import characters, creatures and droids with animations from Star Wars: Knights of the Old Republic",
     "doc_url": "https://github.com/DennisHerrm/KOTOR-Import-Blender",
     "category": "Import-Export",

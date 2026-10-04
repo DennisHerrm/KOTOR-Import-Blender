@@ -54,9 +54,21 @@ def _filter_neu(self, context):
     fuelle_figuren(context)
 
 
+def _figur_gesucht(self, context):
+    wm = context.window_manager
+    for i, it in enumerate(wm.kotor_figuren):
+        if it.name == wm.kotor_figur_suche:
+            wm.kotor_figur_index = i
+            return
+
+
 def _figur_gewaehlt(self, context):
     e = _gewaehlter_eintrag(context)
     if e is not None:
+        wm = context.window_manager
+        it = wm.kotor_figuren[wm.kotor_figur_index]
+        if wm.kotor_figur_suche != it.name:
+            wm.kotor_figur_suche = it.name
         try:
             context.window_manager.kotor_variante = str(e.standard)
         except TypeError:
@@ -107,6 +119,7 @@ def kotor_rig(context):
 # ------------------------------------------------------------
 class KOTOR_UL_figuren(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        self.use_filter_show = True                     # Suchfeld immer sichtbar
         sym = {"party": "USER", "npc": "COMMUNITY", "creature": "MONKEY", "droid": "MODIFIER"}.get(item.kategorie, "DOT")
         layout.label(text=item.name, icon=sym)
 
@@ -170,25 +183,93 @@ class KOTOR_OT_importieren(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
-        wm = context.window_manager
-        e = _gewaehlter_eintrag(context)
-        if e is None:
-            self.report({"ERROR"}, "Pick a character first")
-            return {"CANCELLED"}
+        return {"FINISHED"} if importiere_auswahl(context, self.report) is not None else {"CANCELLED"}
+
+
+def importiere_auswahl(context, report):
+    """Die im Panel/Fenster gewaehlte Figur importieren; Armature oder None."""
+    wm = context.window_manager
+    e = _gewaehlter_eintrag(context)
+    if e is None:
+        report({"ERROR"}, "Pick a character first")
+        return None
+    try:
+        v = e.varianten[int(wm.kotor_variante)]
+    except (ValueError, IndexError, TypeError):
+        v = e.varianten[e.standard]
+    kopf = e.kopf if wm.kotor_mit_kopf else ""
+    titel = e.label if len(e.varianten) == 1 else "%s_%s" % (e.label, v.buchstabe)
+    try:
+        arm = importiere(context, v.modell, kopf, v.textur, titel, report)
+    except ValueError as ex:
+        report({"ERROR"}, str(ex))
+        return None
+    if arm is not None:
+        fuelle_anims(context, arm)
+    return arm
+
+
+def zeichne_auswahl(lay, context, popup=False):
+    """Kategorie, Liste, Variante, Kopf, Texturen - fuer Panel und Importfenster."""
+    wm = context.window_manager
+    lay.prop(wm.kotor_einst, "kategorie", expand=True)
+    if popup and bpy.app.version < (4, 2, 0):
+        # Eine UIList in einem Popup laesst Blender 4.0/4.1 abstuerzen
+        # (uiTemplateList_ex, gemessen 4.0.2 und 4.1.1) - dort ein Suchfeld.
+        lay.prop_search(wm, "kotor_figur_suche", wm, "kotor_figuren", text="Character")
+    else:
+        lay.template_list("KOTOR_UL_figuren", "", wm, "kotor_figuren", wm, "kotor_figur_index", rows=12)
+    e = _gewaehlter_eintrag(context)
+    if e is not None:
+        if len(e.varianten) > 1:
+            lay.prop(wm, "kotor_variante", text="Variant")
+        if e.kopf:
+            lay.prop(wm, "kotor_mit_kopf", text="Head: " + e.kopf)
+    p = sitzung.prefs()
+    if p is not None:
+        lay.prop(p, "texturen")
+
+
+class KOTOR_OT_fenster(bpy.types.Operator):
+    bl_idname = "kotor.fenster"
+    bl_label = "Import KOTOR Character"
+    bl_description = "Pick a KOTOR character, creature or droid from your game and import it, optionally with its animations"
+    bl_options = {"REGISTER", "UNDO"}
+
+    animationen: EnumProperty(name="Animations", items=[
+        ("keine", "None", "Only the character (animations can be loaded later in the KOTOR panel)"),
+        ("jka", "JKA set", "The animations that have a Jedi Academy counterpart"),
+        ("alle", "All", "Every animation of the character")], default="keine")
+
+    def invoke(self, context, event):
         try:
-            v = e.varianten[int(wm.kotor_variante)]
-        except (ValueError, IndexError, TypeError):
-            v = e.varianten[e.standard]
-        kopf = e.kopf if wm.kotor_mit_kopf else ""
-        titel = e.label if len(e.varianten) == 1 else "%s_%s" % (e.label, v.buchstabe)
-        try:
-            arm = importiere(context, v.modell, kopf, v.textur, titel, self.report)
-        except ValueError as ex:
-            self.report({"ERROR"}, str(ex))
+            if not sitzung.offen():
+                sitzung.oeffne()
+        except ValueError as e:
+            self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
+        if not len(context.window_manager.kotor_figuren):
+            fuelle_figuren(context)
+        try:
+            return context.window_manager.invoke_props_dialog(self, width=460, confirm_text="Import")
+        except TypeError:                                   # 4.0: ohne confirm_text
+            return context.window_manager.invoke_props_dialog(self, width=460)
+
+    def draw(self, context):
+        lay = self.layout
+        lay.label(text=sitzung.ordner(), icon="FILE_FOLDER")
+        zeichne_auswahl(lay, context, popup=True)
+        lay.label(text="Animations:")
+        lay.prop(self, "animationen", expand=True)
+
+    def execute(self, context):
+        arm = importiere_auswahl(context, self.report)
         if arm is None:
             return {"CANCELLED"}
-        fuelle_anims(context, arm)
+        if self.animationen != "keine":
+            namen = [a.name for a in context.window_manager.kotor_anims if self.animationen == "alle" or a.jka]
+            if namen:
+                lade_namen(context, arm, namen, self.report)
         return {"FINISHED"}
 
 
@@ -260,6 +341,32 @@ class KOTOR_OT_mdl(bpy.types.Operator, ImportHelper):
             return {"CANCELLED"}
         fuelle_anims(context, arm)
         return {"FINISHED"}
+
+
+def lade_namen(context, rig, namen, report):
+    """Animationen als Actions anlegen, die erste aufs Rig legen."""
+    wm = context.window_manager
+    t0 = time.time()
+    try:
+        _, cache = sitzung.oeffne()
+        f = fg.baue_figur(cache, rig["kotor_koerper"], rig.get("kotor_kopf", ""), rig.get("kotor_textur", ""))
+    except (ValueError, KeyError) as e:
+        report({"ERROR"}, str(e))
+        return {"CANCELLED"}
+    wm.progress_begin(0, len(namen))
+    try:
+        actions, fehler = an.lade(context, cache, f, rig, namen, fortschritt=wm.progress_update)
+    finally:
+        wm.progress_end()
+    if not actions:
+        report({"ERROR"}, "None of the animations could be loaded: " + "; ".join(fehler[:3]))
+        return {"CANCELLED"}
+    an.zeige(context, rig, actions[0])
+    text = "%d animation(s) loaded as actions (%.1f s), showing %s" % (len(actions), time.time() - t0, actions[0].name)
+    if fehler:
+        text += "; %d failed: %s" % (len(fehler), "; ".join(fehler[:3]))
+    report({"INFO"}, text)
+    return {"FINISHED"}
 
 
 def fuelle_anims(context, arm):
@@ -339,27 +446,7 @@ class KOTOR_OT_anims_laden(bpy.types.Operator):
         if not namen:
             self.report({"ERROR"}, "No animation selected")
             return {"CANCELLED"}
-        t0 = time.time()
-        try:
-            _, cache = sitzung.oeffne()
-            f = fg.baue_figur(cache, rig["kotor_koerper"], rig.get("kotor_kopf", ""), rig.get("kotor_textur", ""))
-        except (ValueError, KeyError) as e:
-            self.report({"ERROR"}, str(e))
-            return {"CANCELLED"}
-        wm.progress_begin(0, len(namen))
-        try:
-            actions, fehler = an.lade(context, cache, f, rig, namen, fortschritt=wm.progress_update)
-        finally:
-            wm.progress_end()
-        if not actions:
-            self.report({"ERROR"}, "None of the animations could be loaded: " + "; ".join(fehler[:3]))
-            return {"CANCELLED"}
-        an.zeige(context, rig, actions[0])
-        text = "%d animation(s) loaded as actions (%.1f s), showing %s" % (len(actions), time.time() - t0, actions[0].name)
-        if fehler:
-            text += "; %d failed: %s" % (len(fehler), "; ".join(fehler[:3]))
-        self.report({"INFO"}, text)
-        return {"FINISHED"}
+        return lade_namen(context, rig, namen, self.report)
 
 
 class KOTOR_OT_anim_zeigen(bpy.types.Operator):
@@ -426,17 +513,7 @@ class KOTOR_PT_figuren(bpy.types.Panel):
             lay.operator("kotor.spiel_laden", icon="FILE_FOLDER")
             return
         lay.label(text=sitzung.ordner(), icon="FILE_FOLDER")
-        lay.prop(wm.kotor_einst, "kategorie", expand=True)
-        lay.template_list("KOTOR_UL_figuren", "", wm, "kotor_figuren", wm, "kotor_figur_index", rows=10)
-        e = _gewaehlter_eintrag(context)
-        if e is not None:
-            if len(e.varianten) > 1:
-                lay.prop(wm, "kotor_variante", text="Variant")
-            if e.kopf:
-                lay.prop(wm, "kotor_mit_kopf", text="Head: " + e.kopf)
-        p = sitzung.prefs()
-        if p is not None:
-            lay.prop(p, "texturen")
+        zeichne_auswahl(lay, context)
         lay.operator("kotor.importieren", icon="IMPORT")
 
 
@@ -474,12 +551,13 @@ class KOTOR_PT_anims(bpy.types.Panel):
 
 
 def menue_import(self, context):
-    self.layout.operator(KOTOR_OT_suchen.bl_idname, text="KOTOR Character (game)")
+    self.layout.operator(KOTOR_OT_fenster.bl_idname, text="KOTOR Character...")
+    self.layout.operator(KOTOR_OT_suchen.bl_idname, text="KOTOR Character (quick search)")
     self.layout.operator(KOTOR_OT_mdl.bl_idname, text="KOTOR Model (.mdl)")
 
 
 KLASSEN = (KOTOR_PG_figur, KOTOR_PG_anim, KOTOR_PG_einstellungen, KOTOR_UL_figuren, KOTOR_UL_anims,
-           KOTOR_OT_spiel_laden, KOTOR_OT_importieren, KOTOR_OT_suchen, KOTOR_OT_mdl, KOTOR_OT_anims_auflisten,
+           KOTOR_OT_spiel_laden, KOTOR_OT_importieren, KOTOR_OT_fenster, KOTOR_OT_suchen, KOTOR_OT_mdl, KOTOR_OT_anims_auflisten,
            KOTOR_OT_anims_laden, KOTOR_OT_anim_zeigen, KOTOR_OT_jka_wahl, KOTOR_OT_ruhelage,
            KOTOR_PT_figuren, KOTOR_PT_anims)
 
@@ -491,6 +569,7 @@ def register():
     wm.kotor_figuren = CollectionProperty(type=KOTOR_PG_figur)
     wm.kotor_figur_index = IntProperty(default=-1, update=_figur_gewaehlt)
     wm.kotor_variante = EnumProperty(name="Variant", items=_varianten)
+    wm.kotor_figur_suche = StringProperty(name="Character", update=_figur_gesucht)
     wm.kotor_mit_kopf = BoolProperty(name="Head", default=True, description="Attach the character's head model")
     wm.kotor_einst = bpy.props.PointerProperty(type=KOTOR_PG_einstellungen)
     wm.kotor_anims = CollectionProperty(type=KOTOR_PG_anim)
@@ -502,7 +581,7 @@ def register():
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menue_import)
     wm = bpy.types.WindowManager
-    for p in ("kotor_figuren", "kotor_figur_index", "kotor_variante", "kotor_mit_kopf", "kotor_einst",
+    for p in ("kotor_figuren", "kotor_figur_index", "kotor_figur_suche", "kotor_variante", "kotor_mit_kopf", "kotor_einst",
               "kotor_anims", "kotor_anim_index", "kotor_anims_rig"):
         if hasattr(wm, p):
             delattr(wm, p)

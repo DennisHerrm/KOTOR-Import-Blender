@@ -79,6 +79,14 @@ try:
     ok(bpy.ops.kotor.anims_auflisten(), "kotor.anims_auflisten (Mesh gewaehlt)")
     ok(bpy.ops.kotor.anims_laden(welche="alle"), "kotor.anims_laden alle Rancor")
 
+    # Importfenster (Datei > Importieren > KOTOR Character...) ohne Dialog
+    wm.kotor_einst.kategorie = "droid"
+    wm.kotor_figur_index = 0
+    n_vor = len(bpy.data.actions)
+    ok(bpy.ops.kotor.fenster("EXEC_DEFAULT", animationen="jka"), "kotor.fenster JKA-Satz " + wm.kotor_figuren[0].name)
+    p("  neue Actions", len(bpy.data.actions) - n_vor, "aktiv", bpy.context.active_object.animation_data.action.name
+      if bpy.context.active_object.animation_data else None)
+
     # Suche (Datei > Importieren) ohne Popup: Auswahl direkt
     ok(bpy.ops.kotor.suchen("EXEC_DEFAULT", auswahl="0:0"), "kotor.suchen 0:0")
 

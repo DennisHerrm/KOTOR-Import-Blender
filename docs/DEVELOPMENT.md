@@ -48,6 +48,8 @@ weight 1). The armature object carries the 180° turn about Z (KOTOR faces +Y, B
   5.0). **Assigning an action to an armature object that has no pose yet crashes Blender**
   (measured 4.4.3, 5.0.0, 5.2.2; `foreach_action_slot_use`), so the importer updates the view layer
   after building the armature.
+* 4.0/4.1: a `UIList` inside a popup dialog crashes Blender (`uiTemplateList_ex`, measured 4.0.2 and
+  4.1.1) – the import window uses a search field (`prop_search`) there, the list from 4.2 on.
 * 5.0: `Material.use_nodes` deprecated (materials always have nodes).
 
 ## Tests
