@@ -53,9 +53,35 @@ def _lies_bereich(pfad, versatz, laenge):
         return None
 
 
+def _finde_datei(ordner, *teile):
+    """Pfad ohne Ruecksicht auf Gross/klein (K2: data/Models.bif, override) oder None."""
+    pfad = ordner
+    for t in teile:
+        if os.path.exists(os.path.join(pfad, t)):
+            pfad = os.path.join(pfad, t)
+            continue
+        try:
+            treffer = next((e.name for e in os.scandir(pfad) if e.name.lower() == t.lower()), None)
+        except OSError:
+            return None
+        if treffer is None:
+            return None
+        pfad = os.path.join(pfad, treffer)
+    return pfad
+
+
 def ist_spielordner(ordner):
-    return bool(ordner) and os.path.isfile(os.path.join(ordner, "chitin.key")) and \
-        os.path.isfile(os.path.join(ordner, "data", "models.bif"))
+    return bool(ordner) and _finde_datei(ordner, "chitin.key") is not None and \
+        _finde_datei(ordner, "data", "models.bif") is not None
+
+
+def spiel_von_ordner(ordner):
+    """"1" (KOTOR), "2" (KOTOR II) oder "" (nicht erkennbar, z. B. ohne Windows-EXE)."""
+    if _finde_datei(ordner, "swkotor2.exe"):
+        return "2"
+    if _finde_datei(ordner, "swkotor.exe"):
+        return "1"
+    return ""
 
 
 def _dateien_in(ordner):
@@ -97,7 +123,8 @@ class Archiv:
             for i in range(zahl_bif):
                 _, n_off, n_len = struct.unpack_from("<IIH", k, off_bif + i * 12)
                 name = _cstr(k, n_off, n_len).replace("/", "\\")
-                self._bifs.append(os.path.join(ordner, *name.split("\\")))
+                teile = name.split("\\")
+                self._bifs.append(_finde_datei(ordner, *teile) or os.path.join(ordner, *teile))
             for i in range(zahl_key):
                 o = off_key + i * 22
                 name = _cstr(k, o, 16)
@@ -110,8 +137,8 @@ class Archiv:
             return "chitin.key: truncated"
 
         # ---- Texturpaket (nur TPC) ----
-        paket = os.path.join(ordner, "TexturePacks", "swpc_tex_%s.erf" % texturpaket)
-        if os.path.isfile(paket):
+        paket = _finde_datei(ordner, "TexturePacks", "swpc_tex_%s.erf" % texturpaket)
+        if paket and os.path.isfile(paket):
             kopf = _lies_bereich(paket, 0, 160)
             if kopf:
                 zahl = struct.unpack_from("<I", kopf, 16)[0]
@@ -127,7 +154,7 @@ class Archiv:
                                                      struct.unpack_from("<II", res, i * 8))
 
         # ---- Override ----
-        self._lade_lose(os.path.join(ordner, "Override"), ueberschreiben=False)
+        self._lade_lose(_finde_datei(ordner, "Override") or os.path.join(ordner, "Override"), ueberschreiben=False)
         self.ordner = ordner
         return ""
 
@@ -215,13 +242,16 @@ class Archiv:
 # ------------------------------------------------------------
 #  Spielordner finden (wie FindeSpielordner im Max-Plugin)
 # ------------------------------------------------------------
-def finde_spielordner(gemerkt=""):
-    if ist_spielordner(gemerkt):
+def finde_spielordner(gemerkt="", spiel="1"):
+    """Ordner von KOTOR ("1") oder KOTOR II ("2"): gemerkt, Steam (alle Bibliotheken), GOG."""
+    if ist_spielordner(gemerkt) and spiel_von_ordner(gemerkt) in ("", spiel):
         return gemerkt
+    steam_name = "Knights of the Old Republic II" if spiel == "2" else "swkotor"
+    gog_name = "Star Wars - KotOR2" if spiel == "2" else "Star Wars - KotOR"
     kandidaten = []
     pf86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
     steam = os.path.join(pf86, "Steam")
-    kandidaten.append(os.path.join(steam, "steamapps", "common", "swkotor"))
+    kandidaten.append(os.path.join(steam, "steamapps", "common", steam_name))
     # Weitere Steam-Bibliotheken aus libraryfolders.vdf ("path" "D:\\SteamLibrary").
     try:
         with open(os.path.join(steam, "steamapps", "libraryfolders.vdf"), "r", encoding="utf-8", errors="replace") as f:
@@ -235,15 +265,15 @@ def finde_spielordner(gemerkt=""):
             e = t.find('"', a + 1) if a >= 0 else -1
             if e < 0:
                 break
-            kandidaten.append(os.path.join(t[a + 1:e].replace("\\\\", "\\"), "steamapps", "common", "swkotor"))
+            kandidaten.append(os.path.join(t[a + 1:e].replace("\\\\", "\\"), "steamapps", "common", steam_name))
             p = e + 1
     except OSError:
         pass
-    kandidaten += [r"C:\GOG Games\Star Wars - KotOR",
-                   r"C:\Program Files (x86)\GOG Galaxy\Games\Star Wars - KotOR",
-                   os.path.expanduser("~/.local/share/Steam/steamapps/common/swkotor"),
-                   os.path.expanduser("~/Library/Application Support/Steam/steamapps/common/swkotor")]
+    kandidaten += [os.path.join(r"C:\GOG Games", gog_name),
+                   os.path.join(r"C:\Program Files (x86)\GOG Galaxy\Games", gog_name),
+                   os.path.expanduser("~/.local/share/Steam/steamapps/common/" + steam_name),
+                   os.path.expanduser("~/Library/Application Support/Steam/steamapps/common/" + steam_name)]
     for k in kandidaten:
-        if ist_spielordner(k):
+        if ist_spielordner(k) and spiel_von_ordner(k) in ("", spiel):
             return k
     return ""

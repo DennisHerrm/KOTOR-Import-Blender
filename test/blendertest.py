@@ -21,6 +21,7 @@ import kotor_import                                   # noqa: E402
 from kotor_import import animation as an              # noqa: E402
 from kotor_import import sitzung, szene, ui           # noqa: E402
 from kotor_import.kt import figur as fg               # noqa: E402
+from kotor_import.kt import archiv as ar             # noqa: E402
 
 args = sys.argv[sys.argv.index("--") + 1:]
 SPIEL, AUS = args[0], args[1]
@@ -162,9 +163,10 @@ def main():
     t0 = time.time()
     p("Blender", bpy.app.version_string, "Python", sys.version.split()[0])
     kotor_import.register()
-    sitzung.oeffne(SPIEL)
+    SPIEL_NR = ar.spiel_von_ordner(SPIEL) or "1"
+    sitzung.oeffne(SPIEL_NR, SPIEL)
     p("Spiel", sitzung.ordner(), len(sitzung.eintraege()), "Eintraege")
-    archiv, cache = sitzung.oeffne(SPIEL)
+    archiv, cache = sitzung.oeffne(SPIEL_NR)
     gesamt_max = 0.0
     for spec in FIGUREN:
         teile = (spec.split(":") + ["", "", "", ""])[:4]

@@ -20,8 +20,16 @@ variant, the assembled nodes (name, parent, local pose), every mesh (vertex/tria
 texture, sums over positions, UVs, triangle indices, skin bones × weights, bind data) and, for the
 default variant, one line per animation (tracks, keys, sums over rotations, positions and times,
 events). `ktdump pruef` (Max project, `tools/ktdump.cpp`) writes the same from C++.
-Result 4.10.2026: 288 088 lines, 506 entries, 1744 characters, 111 338 animations, **0
-differences** (Python ≈ 46 s, C++ ≈ 4 s).
+Result 9.10.2026 (0.3.0): KOTOR 288 088 lines (506 entries, 1744 characters, 111 338 animations) and
+KOTOR II 583 850 lines (664 entries, 3244 characters, 241 192 animations), **0 differences**.
+
+## KOTOR II
+
+`kt/archiv.py`: `spiel_von_ordner` (swkotor2.exe → "2"), `finde_spielordner(gemerkt, spiel)` (Steam
+"Knights of the Old Republic II", GOG "Star Wars - KotOR2"), file names looked up case-insensitively
+(K2 has `data/Models.bif`, `override`). `sitzung.py` keeps one open game per number; the armature
+stores `kotor_spiel`. Reader rules shared with the Max plugin: body variants A–N, `racetex` for
+one-model rows, the replacement texture also fills meshes without a texture (K2 HK-47, Duros …).
 
 ## Bones
 

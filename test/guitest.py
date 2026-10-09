@@ -10,9 +10,10 @@ import addon_utils
 import bpy
 
 args = sys.argv[sys.argv.index("--") + 1:]
-SPIEL, AUS = args
+SPIEL, AUS = args[:2]
+K2 = len(args) > 2 and args[2] == "2"          # KOTOR II: Spiel umschalten, Atton
 os.makedirs(AUS, exist_ok=True)
-VER = "%d%d" % bpy.app.version[:2]
+VER = "%d%d" % bpy.app.version[:2] + ("_k2" if K2 else "")
 log = open(os.path.join(AUS, "gui_%s.txt" % VER), "w", encoding="utf-8")
 
 
@@ -66,7 +67,10 @@ def ablauf():
             with bpy.context.temp_override(window=w, area=area):
                 bpy.ops.kotor.spiel_laden()
             wm = bpy.context.window_manager
-            wm.kotor_figur_index = next(n for n, it in enumerate(wm.kotor_figuren) if it.name == "Party NPC Bastila")
+            if K2:
+                wm.kotor_einst.spiel = "2"
+            wm.kotor_figur_index = next(n for n, it in enumerate(wm.kotor_figuren)
+                                        if it.name == ("Party NPC Atton" if K2 else "Party NPC Bastila"))
             return 1.0
         if s == 2:
             foto("2_liste")

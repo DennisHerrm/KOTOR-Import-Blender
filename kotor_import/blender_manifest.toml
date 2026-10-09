@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
 id = "kotor_import"
-version = "0.2.0"
+version = "0.3.0"
 name = "KOTOR Import"
-tagline = "Import characters with animations from Knights of the Old Republic"
+tagline = "Characters and animations from KOTOR I and II"
 maintainer = "DennisHerrm"
 type = "add-on"
 website = "https://github.com/DennisHerrm/KOTOR-Import-Blender"

@@ -129,7 +129,7 @@ def lade_figurenliste(a):
         race = app.wert(z, "race")
         if e.art == "B":
             doppelt = set()
-            for b in "abcdefghij":
+            for b in "abcdefghijklmn":                 # K1: A-J, K2 zusaetzlich K-N
                 v = Variante(b.upper(), app.wert(z, "model" + b), app.wert(z, "tex" + b))
                 if not v.modell or not a.gibt(v.modell, ar.TYP_MDL):
                     continue
@@ -151,7 +151,9 @@ def lade_figurenliste(a):
                 if kopf and a.gibt(kopf, ar.TYP_MDL):
                     e.kopf = kopf
         else:
-            v = Variante("A", app.wert(z, "modela"), app.wert(z, "texa"))
+            # racetex: Farbvariante eines Ein-Modell-Eintrags (Hutt 2-4, Droidenfarben;
+            # in K2 die einzige Textur von HK-47, Duros ... - dort steht im Modell NULL).
+            v = Variante("A", app.wert(z, "modela"), app.wert(z, "texa") or app.wert(z, "racetex"))
             if not v.modell or not a.gibt(v.modell, ar.TYP_MDL):
                 v.modell = race
             if v.modell and a.gibt(v.modell, ar.TYP_MDL):
@@ -338,7 +340,9 @@ def baue_figur(c, koerper, kopf="", textur_ersatz=""):
         n.knoten = fk
         n.daten = m.netze[q.netz]
         n.textur = n.daten.textur0
-        if teil == 0 and ersatz and n.textur.lower() == ersetzt:
+        # Ersatztextur: die Haupttextur des Koerpers und Netze ohne Textur (NULL) - viele
+        # K2-Modelle (HK-47, Duros, Schmuggler) bekommen ihre Textur nur ueber appearance.2da.
+        if teil == 0 and ersatz and (n.textur.lower() == ersetzt or not n.textur):
             n.textur = ersatz
         if n.daten.skin:
             # Die Skin-Tabellen zaehlen die Knoten in DATEIREIHENFOLGE (= Modell.knoten),

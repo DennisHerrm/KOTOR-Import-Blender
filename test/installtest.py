@@ -87,6 +87,32 @@ try:
     p("  neue Actions", len(bpy.data.actions) - n_vor, "aktiv", bpy.context.active_object.animation_data.action.name
       if bpy.context.active_object.animation_data else None)
 
+    # KOTOR II: Ordner absichtlich ins KOTOR-Feld -> muss ins KOTOR-II-Feld wandern
+    K2 = r"C:\Program Files (x86)\Steam\steamapps\common\Knights of the Old Republic II"
+    prefs.spielordner = K2
+    p("  Auto-Erkennung: KOTOR-Feld", repr(prefs.spielordner), "KOTOR II-Feld", repr(prefs.spielordner2),
+      "Spiel", wm.kotor_einst.spiel)
+    prefs.spielordner = SPIEL
+    wm.kotor_einst.spiel = "2"
+    p("  KOTOR II Liste", len(wm.kotor_figuren), "Eintraege")
+    wm.kotor_einst.kategorie = "party"
+    wm.kotor_figur_index = next(n for n, it in enumerate(wm.kotor_figuren) if it.name == "Party NPC Atton")
+    ok(bpy.ops.kotor.fenster("EXEC_DEFAULT", animationen="jka"), "kotor.fenster Atton (KOTOR II)")
+    atton = bpy.context.active_object
+    p("  Atton Spiel", atton.get("kotor_spiel"), "Actions", len([a for a in bpy.data.actions if a.get("kotor_rig") == atton.get("kotor_titel")]))
+    wm.kotor_einst.kategorie = "all"
+    wm.kotor_figur_index = next(n for n, it in enumerate(wm.kotor_figuren) if it.name == "Party NPC HK47")
+    ok(bpy.ops.kotor.importieren(), "kotor.importieren HK-47 (KOTOR II, racetex)")
+    hk = bpy.context.active_object
+    p("  HK-47 Texturen", sorted({m.name for o in hk.children for m in o.data.materials}))
+    lose2 = os.path.join(os.path.dirname(LOSE), "lose2", "n_darthnihilus.mdl")
+    wm.kotor_einst.spiel = "1"
+    ok(bpy.ops.kotor.mdl(filepath=lose2), "kotor.mdl Nihilus (K2 erkannt, obwohl KOTOR gewaehlt)")
+    p("  Nihilus Spiel", bpy.context.active_object.get("kotor_spiel"))
+    ok(bpy.ops.kotor.anims_auflisten(), "kotor.anims_auflisten Nihilus")
+    p("  Nihilus Animationen", len(wm.kotor_anims))
+    wm.kotor_einst.spiel = "1"
+
     # Suche (Datei > Importieren) ohne Popup: Auswahl direkt
     ok(bpy.ops.kotor.suchen("EXEC_DEFAULT", auswahl="0:0"), "kotor.suchen 0:0")
 

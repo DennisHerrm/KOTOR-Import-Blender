@@ -13,6 +13,7 @@ from . import animation as an
 from . import sitzung
 from . import szene
 from .kt import figur as fg
+from .kt import mdl
 
 KATEGORIEN = [("party", "Party", "Party members"), ("npc", "NPCs", "Characters"),
               ("creature", "Creatures", "Creatures and animals"), ("droid", "Droids", "Droids"),
@@ -54,6 +55,15 @@ def _filter_neu(self, context):
     fuelle_figuren(context)
 
 
+def _spiel_neu(self, context):
+    """Anderes Spiel gewaehlt: oeffnen (falls gefunden) und die Liste neu fuellen."""
+    try:
+        sitzung.oeffne()
+    except ValueError:
+        pass
+    fuelle_figuren(context)
+
+
 def _figur_gesucht(self, context):
     wm = context.window_manager
     for i, it in enumerate(wm.kotor_figuren):
@@ -76,6 +86,9 @@ def _figur_gewaehlt(self, context):
 
 
 class KOTOR_PG_einstellungen(bpy.types.PropertyGroup):
+    spiel: EnumProperty(name="Game", items=[("1", "KOTOR", "Star Wars: Knights of the Old Republic"),
+                                            ("2", "KOTOR II", "Star Wars: Knights of the Old Republic II - The Sith Lords")],
+                        default="1", update=_spiel_neu)
     kategorie: EnumProperty(name="Category", items=KATEGORIEN, default="party", update=_filter_neu)
 
 
@@ -144,25 +157,25 @@ class KOTOR_OT_spiel_laden(bpy.types.Operator):
     bl_description = "Open the KOTOR installation (folder with chitin.key) and list its characters"
 
     def execute(self, context):
-        global _such_cache
-        _such_cache = []
+        spiel = sitzung.aktuell()
+        _such_cache.pop(spiel, None)
         try:
-            sitzung.schliesse()
-            sitzung.oeffne()
+            sitzung.schliesse(spiel)
+            a, _ = sitzung.oeffne(spiel)
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
         fuelle_figuren(context)
-        a, _ = sitzung.oeffne()
         k, t, o = a.zahlen()
-        self.report({"INFO"}, "KOTOR: %d characters (%d resources, %d textures in the pack, %d in Override)"
-                    % (len(sitzung.eintraege()), k, t, o))
+        self.report({"INFO"}, "%s: %d characters (%d resources, %d textures in the pack, %d in Override)"
+                    % (sitzung.SPIELE[spiel], len(sitzung.eintraege()), k, t, o))
         return {"FINISHED"}
 
 
-def importiere(context, koerper, kopf, textur, titel, report):
+def importiere(context, koerper, kopf, textur, titel, report, spiel=None):
     t0 = time.time()
-    archiv, cache = sitzung.oeffne()
+    spiel = spiel or sitzung.aktuell()
+    archiv, cache = sitzung.oeffne(spiel)
     try:
         f = fg.baue_figur(cache, koerper, kopf, textur)
     except ValueError as e:
@@ -171,7 +184,8 @@ def importiere(context, koerper, kopf, textur, titel, report):
     prefs = sitzung.prefs()
     arm, bericht = szene.baue_szene(context, archiv, f, titel or f.koerper,
                                     mit_texturen=prefs.texturen if prefs else True)
-    report({"INFO"}, "%s (%.1f s)" % (bericht, time.time() - t0))
+    arm["kotor_spiel"] = spiel
+    report({"INFO"}, "%s: %s (%.1f s)" % (sitzung.SPIELE[spiel], bericht, time.time() - t0))
     print("KOTOR Import:", bericht)
     return arm
 
@@ -212,6 +226,16 @@ def importiere_auswahl(context, report):
 def zeichne_auswahl(lay, context, popup=False):
     """Kategorie, Liste, Variante, Kopf, Texturen - fuer Panel und Importfenster."""
     wm = context.window_manager
+    lay.prop(wm.kotor_einst, "spiel", expand=True)
+    if not sitzung.offen():
+        lay.label(text="%s not found - set its folder in the add-on preferences" % sitzung.SPIELE[sitzung.aktuell()],
+                  icon="ERROR")
+        p = sitzung.prefs()
+        if p is not None:
+            lay.prop(p, "spielordner2" if sitzung.aktuell() == "2" else "spielordner", text="")
+            lay.operator("kotor.spiel_laden", icon="FILE_FOLDER")
+        return
+    lay.label(text=sitzung.ordner(), icon="FILE_FOLDER")
     lay.prop(wm.kotor_einst, "kategorie", expand=True)
     if popup and bpy.app.version < (4, 2, 0):
         # Eine UIList in einem Popup laesst Blender 4.0/4.1 abstuerzen
@@ -245,10 +269,10 @@ class KOTOR_OT_fenster(bpy.types.Operator):
         try:
             if not sitzung.offen():
                 sitzung.oeffne()
-        except ValueError as e:
-            self.report({"ERROR"}, str(e))
-            return {"CANCELLED"}
-        if not len(context.window_manager.kotor_figuren):
+        except ValueError:
+            pass                                            # Hinweis + Ordnerfeld im Fenster
+        wm = context.window_manager
+        if not len(wm.kotor_figuren) or not sitzung.offen():
             fuelle_figuren(context)
         try:
             return context.window_manager.invoke_props_dialog(self, width=460, confirm_text="Import")
@@ -257,7 +281,6 @@ class KOTOR_OT_fenster(bpy.types.Operator):
 
     def draw(self, context):
         lay = self.layout
-        lay.label(text=sitzung.ordner(), icon="FILE_FOLDER")
         zeichne_auswahl(lay, context, popup=True)
         lay.label(text="Animations:")
         lay.prop(self, "animationen", expand=True)
@@ -273,23 +296,25 @@ class KOTOR_OT_fenster(bpy.types.Operator):
         return {"FINISHED"}
 
 
-_such_cache = []
+_such_cache = {}
 
 
 def _such_eintraege(self, context):
-    global _such_cache
-    if not _such_cache and sitzung.offen():
+    spiel = sitzung.aktuell()
+    if spiel not in _such_cache and sitzung.offen():
+        liste = []
         for i, e in enumerate(sitzung.eintraege()):
             for j, v in enumerate(e.varianten):
                 zusatz = "" if len(e.varianten) == 1 else "  [%s %s]" % (v.buchstabe, v.modell)
-                _such_cache.append(("%d:%d" % (i, j), e.titel + zusatz, e.kategorie))
-    return _such_cache or [("-", "Game not found", "")]
+                liste.append(("%d:%d" % (i, j), e.titel + zusatz, e.kategorie))
+        _such_cache[spiel] = liste
+    return _such_cache.get(spiel) or [("-", "Game not found", "")]
 
 
 class KOTOR_OT_suchen(bpy.types.Operator):
     bl_idname = "kotor.suchen"
     bl_label = "KOTOR Character"
-    bl_description = "Search all KOTOR characters, creatures and droids and import one"
+    bl_description = "Search all characters, creatures and droids of the game chosen in the KOTOR panel and import one"
     bl_property = "auswahl"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -327,16 +352,25 @@ class KOTOR_OT_mdl(bpy.types.Operator, ImportHelper):
     filter_glob: StringProperty(default="*.mdl", options={"HIDDEN"})
 
     def execute(self, context):
+        # KOTOR II erkennt man am Funktionszeiger im Geometriekopf (siehe kt/mdl.py).
+        spiel = sitzung.aktuell()
         try:
-            archiv, _ = sitzung.oeffne()
+            with open(self.filepath, "rb") as f:
+                kopf = f.read(16)
+            if len(kopf) == 16:
+                spiel = "2" if int.from_bytes(kopf[12:16], "little") == mdl.K2_MODELL else "1"
+        except OSError:
+            pass
+        try:
+            archiv, _ = sitzung.oeffne(spiel)
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
         ordner, datei = os.path.split(self.filepath)
         archiv.zusatz_ordner(ordner)
-        sitzung.neuer_cache()
+        sitzung.neuer_cache(spiel)
         name = os.path.splitext(datei)[0]
-        arm = importiere(context, name, "", "", name, self.report)
+        arm = importiere(context, name, "", "", name, self.report, spiel)
         if arm is None:
             return {"CANCELLED"}
         fuelle_anims(context, arm)
@@ -348,7 +382,7 @@ def lade_namen(context, rig, namen, report):
     wm = context.window_manager
     t0 = time.time()
     try:
-        _, cache = sitzung.oeffne()
+        _, cache = sitzung.oeffne(rig.get("kotor_spiel", "1"))
         f = fg.baue_figur(cache, rig["kotor_koerper"], rig.get("kotor_kopf", ""), rig.get("kotor_textur", ""))
     except (ValueError, KeyError) as e:
         report({"ERROR"}, str(e))
@@ -376,7 +410,7 @@ def fuelle_anims(context, arm):
     if arm is None:
         return
     try:
-        _, cache = sitzung.oeffne()
+        _, cache = sitzung.oeffne(arm.get("kotor_spiel", "1"))
         f = fg.baue_figur(cache, arm["kotor_koerper"], arm.get("kotor_kopf", ""), arm.get("kotor_textur", ""))
     except (ValueError, KeyError):
         return
@@ -410,7 +444,7 @@ class KOTOR_OT_anims_auflisten(bpy.types.Operator):
             self.report({"ERROR"}, "Select an imported KOTOR character")
             return {"CANCELLED"}
         try:
-            sitzung.oeffne()
+            sitzung.oeffne(rig.get("kotor_spiel", "1"))
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
@@ -504,17 +538,10 @@ class KOTOR_PT_figuren(bpy.types.Panel):
     bl_label = "KOTOR Characters"
 
     def draw(self, context):
-        wm = context.window_manager
         lay = self.layout
-        if not sitzung.offen():
-            p = sitzung.prefs()
-            if p is not None:
-                lay.prop(p, "spielordner", text="")
-            lay.operator("kotor.spiel_laden", icon="FILE_FOLDER")
-            return
-        lay.label(text=sitzung.ordner(), icon="FILE_FOLDER")
         zeichne_auswahl(lay, context)
-        lay.operator("kotor.importieren", icon="IMPORT")
+        if sitzung.offen():
+            lay.operator("kotor.importieren", icon="IMPORT")
 
 
 class KOTOR_PT_anims(bpy.types.Panel):
@@ -534,7 +561,8 @@ class KOTOR_PT_anims(bpy.types.Panel):
             lay.label(text=rig.name, icon="ARMATURE_DATA")
             lay.operator("kotor.anims_auflisten", icon="FILE_REFRESH")
             return
-        lay.label(text="%s: %d animations" % (rig.name, len(wm.kotor_anims)), icon="ARMATURE_DATA")
+        lay.label(text="%s (%s): %d animations" % (rig.name, sitzung.SPIELE.get(rig.get("kotor_spiel", "1"), "?"),
+                                                   len(wm.kotor_anims)), icon="ARMATURE_DATA")
         lay.template_list("KOTOR_UL_anims", "", wm, "kotor_anims", wm, "kotor_anim_index", rows=10)
         r = lay.row(align=True)
         r.operator("kotor.anim_zeigen", icon="PLAY")
